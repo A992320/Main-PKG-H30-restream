@@ -48,7 +48,7 @@
   box-shadow:-20px 0 70px rgba(0,0,0,.7);
   transform:translateX(102%);
   transition:transform .42s cubic-bezier(0.22,1,0.36,1);
-  direction:rtl;
+  direction:<?= htmlspecialchars($__dir ?? 'rtl', ENT_QUOTES, 'UTF-8') ?>;
 }
 .shsb.open{transform:translateX(0)}
 
@@ -184,6 +184,19 @@
     favs    : <?php echo (!empty($hide_favorites))     ? 'false' : 'true'; ?>,
     notifs  : <?php echo (!empty($hide_notifications)) ? 'false' : 'true'; ?>
   };
+  var TXT = <?php echo json_encode([
+    'home' => $t['home'] ?? ($__cur_lang === 'en' ? 'Home' : ($__cur_lang === 'tr' ? 'Ana Sayfa' : 'الرئيسية')),
+    'favs' => $t['favorites'] ?? 'المفضلة',
+    'notifs' => $t['notifications'] ?? 'الإشعارات',
+    'admin' => $t['admin_panel'] ?? 'لوحة التحكم',
+    'menu' => $__cur_lang === 'en' ? 'Main menu' : ($__cur_lang === 'tr' ? 'Ana menü' : 'القائمة الرئيسية'),
+    'browse' => $__cur_lang === 'en' ? 'Browse' : ($__cur_lang === 'tr' ? 'Gözat' : 'تصفّح'),
+    'categories' => $t['categories'] ?? 'الأقسام',
+    'searchCategories' => $__cur_lang === 'en' ? 'Search categories…' : ($__cur_lang === 'tr' ? 'Kategorilerde ara…' : 'ابحث في الأقسام…'),
+    'empty' => $__cur_lang === 'en' ? 'No categories available' : ($__cur_lang === 'tr' ? 'Kullanılabilir kategori yok' : 'لا توجد أقسام متاحة'),
+    'noResults' => $__cur_lang === 'en' ? 'No matching category' : ($__cur_lang === 'tr' ? 'Eşleşen kategori yok' : 'لا يوجد قسم بهذا الاسم'),
+    'available' => $__cur_lang === 'en' ? 'categories available' : ($__cur_lang === 'tr' ? 'kategori mevcut' : 'قسم متاح')
+  ], JSON_UNESCAPED_UNICODE); ?>;
 
   function hx(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){
     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
@@ -261,6 +274,24 @@
     built=true;
   }
 
+  function applyTranslations(){
+    if(!panel) return;
+    var quick={home:TXT.home,favs:TXT.favs,notifs:TXT.notifs,admin:TXT.admin};
+    Object.keys(quick).forEach(function(action){
+      var item=panel.querySelector('[data-act="'+action+'"] .shsb-txt');
+      if(item) item.textContent=quick[action];
+    });
+    var subtitle=panel.querySelector('.shsb-brand span');
+    if(subtitle) subtitle.textContent=TXT.menu;
+    var headings=panel.querySelectorAll('.shsb-label');
+    if(headings[0]) headings[0].textContent=TXT.browse;
+    if(headings[1]) headings[1].textContent=TXT.categories;
+    if(findEl) findEl.placeholder=TXT.searchCategories;
+    panel.setAttribute('aria-label',TXT.menu);
+    var empty=panel.querySelector('.shsb-empty');
+    if(empty && !panel.querySelector('[data-cat]')) empty.textContent=TXT.empty;
+    if(cntEl && window.App && Array.isArray(App.cats) && App.cats.length) cntEl.textContent=App.cats.length+' '+TXT.available;
+  }
   function row(act,txt,cnt,ico,mod,extra){
     return '<button type="button" class="shsb-item shsb-anim'+(mod==='accent'?' shsb-accent':'')+'" data-act="'+act+'">'+
              '<span class="shsb-ico">'+ico+'</span>'+
@@ -346,6 +377,7 @@
   function open(){
     build();
     renderCats();
+    applyTranslations();
     if(findEl){findEl.value='';filter('');}
     ov.classList.add('open');
     panel.classList.add('open');

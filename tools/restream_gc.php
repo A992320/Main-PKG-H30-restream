@@ -30,8 +30,8 @@ $statusOnly = in_array('--status', $argv, true);
 
 // ── عرض القنوات المتاحة: php restream_gc.php --list ──
 if (in_array('--list', $argv, true)) {
-    $C = fn($c, $s) => "\033[{$c}m{$s}\033[0m";
-    $mask = fn($u) => preg_replace('~/(live|movie|series)/([^/]+)/([^/]+)/~', '/$1/•••/•••/', (string)$u);
+    $C = function($c, $s) { return "\033[{$c}m{$s}\033[0m"; };
+    $mask = function($u) { return preg_replace('~/(live|movie|series)/([^/]+)/([^/]+)/~', '/$1/•••/•••/', (string)$u); };
 
     try {
         $tot = (int)db()->query("SELECT COUNT(*) FROM channels")->fetchColumn();
@@ -83,7 +83,7 @@ if (in_array('--list', $argv, true)) {
 $ni = array_search('--scan', $argv, true);
 if ($ni !== false) {
     $n = max(3, min(40, (int)($argv[$ni + 1] ?? 8)));
-    $C = fn($c, $s) => "\033[{$c}m{$s}\033[0m";
+    $C = function($c, $s) { return "\033[{$c}m{$s}\033[0m"; };
     $OKA = ['aac','mp3','opus','flac'];
     $OKV = ['h264','vp9','av1'];
 
@@ -170,9 +170,7 @@ if ($ti !== false) {
              . "            e12          لفيلم أو حلقة\n");
         exit(1);
     }
-    $key = rsKey($kind, $chId);
-
-    $C = fn($c, $s) => "\033[{$c}m{$s}\033[0m";
+    $C = function($c, $s) { return "\033[{$c}m{$s}\033[0m"; };
     echo "\n" . $C('1', "══ اختبار " . ($kind === 'e' ? "الفيلم/الحلقة" : "القناة") . " #$chId ══") . "\n\n";
 
     // ١) ffmpeg
@@ -191,14 +189,19 @@ if ($ti !== false) {
     // ٣) الرابط من قاعدة البيانات
     try {
         $st = $kind === 'e'
-            ? db()->prepare('SELECT title AS name, stream_url FROM episodes WHERE id=? LIMIT 1')
-            : db()->prepare('SELECT name, stream_url FROM channels WHERE id=? LIMIT 1');
+            ? db()->prepare('SELECT title AS name, stream_url, NULL AS audio_url, 0.000 AS audio_delay FROM episodes WHERE id=? LIMIT 1')
+            : db()->prepare('SELECT name, stream_url, audio_url, audio_delay FROM channels WHERE id=? LIMIT 1');
         $st->execute([$chId]);
         $row = $st->fetch(PDO::FETCH_ASSOC);
     } catch (Throwable $e) { $row = null; echo "  " . $C('31','✘') . " قاعدة البيانات: " . $e->getMessage() . "\n"; }
     if (!$row) { echo "  " . $C('31','✘') . " القناة غير موجودة\n"; exit(1); }
 
     $src = trim((string)$row['stream_url']);
+    $audio = trim((string)($row['audio_url'] ?? ''));
+    if ($audio !== '' && !preg_match('~^https?://~i', $audio)) $audio = '';
+    $audioDelay = max(-30.0, min(30.0, (float)($row['audio_delay'] ?? 0)));
+    $key = rsKey($kind, $chId);
+    if ($audio !== '') $key .= ':a' . substr(hash('sha256', $audio . '|' . number_format($audioDelay, 3, '.', '')), 0, 12);
     printf("  %s القناة: %s\n", $C('32','✔'), $row['name']);
     printf("    الرابط: %s\n", preg_replace('~/(live|movie|series)/([^/]+)/([^/]+)/~', '/$1/•••/•••/', $src));
 
@@ -212,14 +215,14 @@ if ($ti !== false) {
     echo "\n" . $C('1', "── تشغيل التحويل ──") . "\n";
     rsStop($key);                      // بداية نظيفة
     $t0 = microtime(true);
-    $r = rsStart($key, $src);
+    $r = rsStart($key, $src, false, $audio, $audioDelay);
     $ms = (int)round((microtime(true) - $t0) * 1000);
 
     if (!empty($r['ok'])) {
         printf("    %s بدأ خلال %dms%s\n", $C('32','✔'), $ms,
                !empty($r['pending']) ? ' (ما زال يجهّز)' : '');
         sleep(6);
-        $segs = glob(rsDir($key) . '/*.ts') ?: [];
+        $segs = glob(rsDir($key) . '/*.m4s') ?: [];
         printf("    %s المقاطع بعد 6 ثوانٍ: %d\n", $segs ? $C('32','✔') : $C('31','✘'), count($segs));
 
         if ($segs) {

@@ -41,7 +41,7 @@ window.__shsRestreamOn = <?php
   const mem=new Map();          // كاش في الذاكرة (أسرع من sessionStorage)
   const inflight=new Map();     // طلبات جارية الآن
   const TTL=10*60*1000;         // صلاحية الكاش: ١٠ دقائق (كانت دقيقة واحدة → إعادة جلب مستمرة)
-  const SS_PREFIX='shs_c_';     // مفتاح قديم — يُنظَّف فقط، لم يعد يُستخدم للاسترجاع
+  const SS_PREFIX='shs_c_v2_';     // مفتاح قديم — يُنظَّف فقط، لم يعد يُستخدم للاسترجاع
 
   /* ⚠ كان هنا استرجاع الكاش من sessionStorage إلى الذاكرة عند كل تحميل للصفحة.
      وهو سبب مباشر لعطل: «رفعتُ فيديو ولا يظهر إلا بعد عدة تحديثات».
@@ -303,9 +303,10 @@ try{ window.App = App; }catch(e){}
 /* ════ DEVICE DETECTION — مرة واحدة في أول الكود ════ */
 const _UA=(function(){
   const ua=navigator.userAgent||'';
-  const isIOS=/iPad|iPhone|iPod/.test(ua)&&!window.MSStream;
-  const isAndroidTV=/Android/i.test(ua)&&(/TV|STB|BOX|bravia|shield|mibox/i.test(ua)||!/Mobile/i.test(ua));
-  const isAndroidMobile=/Android/i.test(ua)&&/Mobile/i.test(ua)&&!isAndroidTV;
+  const isIPadOS=navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
+  const isIOS=(/iPad|iPhone|iPod/.test(ua)||isIPadOS)&&!window.MSStream;
+  const isAndroidTV=/Android/i.test(ua)&&/(Android TV|SMART-TV|STB|bravia|shield|mibox|AFT)/i.test(ua);
+  const isAndroidMobile=/Android/i.test(ua)&&!isAndroidTV;
   // TV الحقيقي فقط — لا نصنف الكمبيوتر كـ TV مطلقاً
   const isSmartTV=/SmartTV|SMART-TV|Tizen|WebOS|HbbTV|VIDAA|NetCast|Hisense|Philips|TCL|BRAVIA/i.test(ua);
   return{
@@ -876,10 +877,11 @@ function renderItemsIntoSliderDOM(sliderDom,items,cardType,highlightStr='',noCap
       poster.className='sr-poster';
       if(item.poster_url){
         const img=document.createElement('img');
-        img.src=esc(item.poster_url);
-        img.loading='lazy';
+        img.src=String(item.poster_url);
+        img.loading=window.matchMedia('(max-width: 768px)').matches?'eager':'lazy';
+        img.fetchPriority='high';
         img.decoding='async';
-        img.alt=esc(item.name);
+        img.alt=String(item.name||'');
         img.onerror=function(){this.style.display='none';};
         poster.appendChild(img);
       }else{
@@ -931,10 +933,11 @@ function renderItemsIntoSliderDOM(sliderDom,items,cardType,highlightStr='',noCap
       thumb.className='ch-thumb';
       if(item.logo_url){
         const img=document.createElement('img');
-        img.src=esc(item.logo_url);
-        img.loading='lazy';
+        img.src=String(item.logo_url);
+        img.loading=window.matchMedia('(max-width: 768px)').matches?'eager':'lazy';
+        img.fetchPriority='high';
         img.decoding='async';
-        img.alt=esc(item.name);
+        img.alt=String(item.name||'');
         img.onerror=function(){this.style.display='none';};
         thumb.appendChild(img);
       }else{
@@ -1047,7 +1050,7 @@ async function openSeriesEpisodes(seriesId,seriesName,seriesPoster){
   App.currentSeriesPoster=seriesPoster||'';
   if(!App.currentSeriesPoster){
     try{
-      var _f=(App.allContent||[]).find(function(x){return String(x.id)===String(seriesId)&&(x.poster_url||x._ftype==='series'||x.ftype==='series');});
+      var _f=(App.allContent||[]).find(function(x){return x.globalType==='series'&&String(x.id)===String(seriesId);});
       if(_f&&_f.poster_url)App.currentSeriesPoster=_f.poster_url;
     }catch(e){}
   }
@@ -1417,7 +1420,7 @@ async function shsRestoreFromHash(){
           const r = await fetch(`api.php?action=series&id=${encodeURIComponent(sid)}`);
           const d = await r.json();
           const one = (d.series && (Array.isArray(d.series) ? d.series[0] : d.series)) || d.data || null;
-          if(one){ name = one.name || ''; poster = one.poster_url || ''; }
+          if(one && String(one.id) === String(sid)){ name = one.name || ''; poster = one.poster_url || ''; }
         }catch(e){}
       } else {
         name = hit.name || ''; poster = hit.poster_url || '';
@@ -1887,7 +1890,7 @@ window.addEventListener('resize',()=>{ if(document.getElementById('catNavbar').s
 /* [تم حذف البحث الصوتي] — أُزيل الزر من شريط البحث ومعه كود SpeechRecognition. */
 
 /* ════ PLAYER STATE ════ */
-const PL={hls:null,dash:null,flv:null,vol:1,muted:false,idle:null,subtitleOn:false,epPanelOpen:false,m3uPanelOpen:false,m3uEntries:[],m3uIdx:-1,userPaused:false,backupUrl:'',usedBackup:false};
+const PL={hls:null,dash:null,flv:null,vol:1,muted:false,idle:null,subtitleOn:false,epPanelOpen:false,m3uPanelOpen:false,m3uEntries:[],m3uIdx:-1,userPaused:false,backupUrl:'',usedBackup:false,audioUrl:'',audioDelay:0,serverMuxAudio:false,externalAudio:null,audioHls:null,audioActive:false,audioSyncTimer:null};
 try{window.PL=PL;}catch(e){} /* جسر: كشف PL على window لإصلاحات المشغّل — لا يغيّر أي منطق */
 const _saved={active:false,url:'',subUrl:'',type:'',epIdx:-1,seriesId:0};
 
@@ -1958,12 +1961,16 @@ function openPlayerChannel(ch){
      مكان آخر، وهو أسوأ من ألّا تعمل إطلاقاً لأنه يبدو عشوائياً.
      فنرجع إلى المصدر الكامل في App.allContent عند غيابها. */
   var _q = (ch && ch.quality) ? String(ch.quality) : '';
+  var _audioUrl = (ch && ch.audio_url) ? String(ch.audio_url).trim() : '';
+  var _audioDelay = (ch && ch.audio_delay !== undefined) ? Number(ch.audio_delay)||0 : 0;
   if(!_q && ch && ch.id){
     try{
       var _src=(App.allContent||[]).find(function(x){
         return String(x.id)===String(ch.id) && (x.ftype==='channels' || x._ftype==='channels' || x.stream_url);
       });
       if(_src && _src.quality) _q=String(_src.quality);
+      if(!_audioUrl && _src && _src.audio_url) _audioUrl=String(_src.audio_url).trim();
+      if(ch.audio_delay === undefined && _src && _src.audio_delay !== undefined) _audioDelay=Number(_src.audio_delay)||0;
     }catch(e){}
   }
   PL.prefQuality = _q;
@@ -1975,7 +1982,9 @@ function openPlayerChannel(ch){
   document.getElementById('pEpNav').style.display='none';
   document.getElementById('epPanelBtn').style.display='none';
   document.getElementById('m3uPanelBtn').style.display='none';
-  PL.backupUrl=ch.backup_url||'';PL.usedBackup=false;
+  PL.backupUrl=ch.backup_url||'';PL.usedBackup=false;PL.audioUrl=_audioUrl;PL.audioDelay=Math.max(-30,Math.min(30,_audioDelay));
+  // مع الوسيط ندمج الصوت في FFmpeg؛ بدون وسيط يبقى تشغيله المنفصل كبديل.
+  PL.serverMuxAudio=!!PL.audioUrl && window.__shsRestreamOn===true && ['hls','ts'].indexOf(detectFmt(ch.stream_url||''))!==-1;
   // مرجع القناة للوسيط — يُستعمل إن فشل بثّ TS بسبب CORS من المصدر
   PL.streamRef=(ch&&ch.id)?{q:'ch',id:ch.id}:null;
   PL._tsRestreamTried=false;
@@ -2009,7 +2018,7 @@ function openPlayerEpisode(idx){
     ? {s:App.currentSeriesId, e:idx} : null;
   App.currentType='episode';App.currentEpisodeIdx=idx;
   const ep=App.allEpisodes[idx];if(!ep)return;
-  PL.backupUrl='';PL.usedBackup=false;
+  PL.backupUrl='';PL.usedBackup=false;PL.audioUrl='';PL.audioDelay=0;PL.serverMuxAudio=false;
   /* مرجع الحلقة للوسيط — كان مفقوداً هنا (موجوداً للقنوات فقط)، فتعذّر
      تحويل حاويات MKV/AVI للحلقات، وهي معظم الأفلام. q:'ep' لأن
      restream.php يميّز الحلقات بـ ?ep=<id>. */
@@ -2451,6 +2460,7 @@ function _tsViaRestream(sref, subUrl, tries){
         showBuf(false);
         if(j.error==='restream_disabled') {
             window.__shsRestreamOn = false;
+            PL.serverMuxAudio = false;
             if (typeof _hardReloadUrl !== 'undefined' && _hardReloadUrl) {
                 toast('الوسيط مطفأ — محاولة التشغيل المباشر…');
                 setTimeout(function(){ initStream(_hardReloadUrl, subUrl); }, 500);
@@ -2564,7 +2574,53 @@ function _startVideoCompat(sref, subUrl, message){
   _compat4kViaRestream(sref, subUrl||'', 0);
   return true;
 }
-function initStream(url,subUrl){
+function _syncExternalAudio(video,a,force){
+  if(!video||!a||PL.externalAudio!==a||!PL.audioActive||video.paused||a.paused)return;
+  const vt=Number(video.currentTime),at=Number(a.currentTime);
+  if(!Number.isFinite(vt)||!Number.isFinite(at))return;
+  const target=Math.max(0,vt-Number(PL.audioDelay||0));
+  const drift=at-target,abs=Math.abs(drift);
+  // عند الفارق الكبير نطابق الموضع مباشرة؛ أما الفارق البسيط فنعالجه
+  // بتعديل طفيف للسرعة حتى لا يسمع المشاهد قفزات في الصوت.
+  if(force||abs>1.25){
+    try{a.currentTime=target;}catch(e){}
+    try{a.playbackRate=1;}catch(e){}
+  }else if(abs>0.08){
+    try{a.playbackRate=Math.max(0.96,Math.min(1.04,1-(drift*0.12)));}catch(e){}
+  }else{
+    try{a.playbackRate=1;}catch(e){}
+  }
+}
+function _destroyExternalAudio(){
+  if(PL.audioSyncTimer){clearInterval(PL.audioSyncTimer);PL.audioSyncTimer=null;}
+  if(PL.audioHls){try{PL.audioHls.destroy();}catch(e){}PL.audioHls=null;}
+  const a=PL.externalAudio;
+  if(a){try{a.pause();a.removeAttribute('src');a.load();a.remove();}catch(e){}}
+  PL.externalAudio=null;PL.audioActive=false;
+}
+function _startExternalAudio(audioUrl,video){
+  if(!audioUrl||!audioUrl.trim()||!video)return;
+  const a=document.createElement('audio');
+  a.id='externalAudioPlayer';a.preload='auto';a.style.display='none';
+  PL.externalAudio=a;PL.audioActive=false;
+  const sync=(force)=>_syncExternalAudio(video,a,!!force);
+  const activate=()=>{if(PL.externalAudio!==a)return;PL.audioActive=true;video.muted=true;a.volume=PL.vol;a.muted=PL.muted;sync(true);};
+  const failed=()=>{if(PL.externalAudio!==a)return;PL.audioActive=false;video.muted=PL.muted;try{toast('تعذر تشغيل رابط الصوت المنفصل — تم استخدام صوت الفيديو');}catch(e){}};
+  a.addEventListener('playing',activate,{once:true});
+  a.addEventListener('loadedmetadata',()=>setTimeout(()=>sync(true),80),{once:true});
+  a.addEventListener('canplay',()=>sync(true),{once:true});
+  a.addEventListener('error',failed,{once:true});
+  video.addEventListener('play',()=>{if(PL.externalAudio===a){sync(true);a.play().catch(()=>{});}});
+  video.addEventListener('pause',()=>{if(PL.externalAudio===a)a.pause();});
+  const host=document.getElementById('pvWrap');if(host)host.appendChild(a);
+  PL.audioSyncTimer=setInterval(()=>sync(false),750);
+  if(detectFmt(audioUrl)==='hls'&&typeof Hls!=='undefined'&&Hls.isSupported()){
+    PL.audioHls=new Hls({enableWorker:false,lowLatencyMode:false});
+    PL.audioHls.attachMedia(a);PL.audioHls.loadSource(audioUrl);
+    PL.audioHls.on(Hls.Events.MANIFEST_PARSED,()=>{sync(true);a.play().catch(()=>{});});
+    PL.audioHls.on(Hls.Events.ERROR,(e,d)=>{if(d.fatal)failed();});
+  }else{a.src=audioUrl;a.load();a.play().catch(()=>{});}
+}function initStream(url,subUrl){
   // نتذكّر الرابط الحالي حتى يعرف الاسترداد التلقائي ما يعيد تشغيله
   _hardReloadUrl=url; _hardReloadSub=subUrl||'';
   const v=document.getElementById('html5Player');
@@ -2593,6 +2649,8 @@ function initStream(url,subUrl){
   const oldV=pvWrap.querySelector('video#html5Player');
   if(oldV)pvWrap.replaceChild(newV,oldV);
   else pvWrap.insertBefore(newV,pvWrap.firstChild);
+
+  _startExternalAudio(PL.serverMuxAudio ? '' : (PL.audioUrl||''),newV);
 
   // ══ نظام الترجمة — يدعم VTT و SRT تلقائياً ══
   if(subUrl&&subUrl.trim()){
@@ -2667,19 +2725,16 @@ function initStream(url,subUrl){
            كل القيود أُزيلت: لا سقف للجودة، لا سقف للسرعة، لا سقف للمخزن.
            المشغّل يأخذ أعلى جودة متاحة ويستهلك كامل سرعة الاتصال. */
 
-        // ── مخزن قصير ومنضبط: يبدأ سريعاً ثم يحافظ على هامش أمان ──
-        maxBufferLength: 15,
-        maxMaxBufferLength: 30,
+        // البث عبر Restream يحتاج هامشاً أكبر من المصدر المباشر لتفادي التقطيع.
+        maxBufferLength: PL._hlsLocalStream ? 30 : 15,
+        maxMaxBufferLength: PL._hlsLocalStream ? 60 : 30,
         maxBufferSize: 40 * 1000 * 1000,
-        backBufferLength: 20,
+        backBufferLength: PL._hlsLocalStream ? 30 : 20,
         maxBufferHole: 0.8,
 
-        /* قائمة Restream تنتج مقاطع 4 ثوانٍ. العدّ السابق (7 مقاطع)
-           كان يضع المشغل 28 ثانية خلف البث؛ لذلك كان VLC يبدأ فوراً
-           بينما صفحة الموقع تنتظر. نبدأ من مقطع واحد آمن (4 ثوانٍ). */
-        liveSyncDuration: 2.5,
-        liveMaxLatencyDuration: 12,
-        initialLiveManifestSize: 1,
+        liveSyncDuration: PL._hlsLocalStream ? 8 : 2.5,
+        liveMaxLatencyDuration: PL._hlsLocalStream ? 24 : 12,
+        initialLiveManifestSize: PL._hlsLocalStream ? 3 : 1,
         liveDurationInfinity: true,
         maxLiveSyncPlaybackRate: 1.0,     // يمنع تسريع الصوت عند تعافي البث
 
@@ -3113,6 +3168,7 @@ function initStream(url,subUrl){
 
 /* destroyPlayer — تنظيف كامل مع تحرير Blob URLs */
 function destroyPlayer(){
+  _destroyExternalAudio();
   if(typeof _tsStopPing==='function') _tsStopPing();   // نوقف نبضة الوسيط
   if(typeof _compat4kStopPing==='function') _compat4kStopPing();
   if(PL._startupRetryTimer){ clearTimeout(PL._startupRetryTimer); PL._startupRetryTimer=null; }
@@ -3159,7 +3215,7 @@ function playM3UEntry(idx){
   if(idx<0||idx>=PL.m3uEntries.length)return;
   try{sessionStorage.setItem('shs_restore',JSON.stringify({type:'m3u',idx:idx,entries:PL.m3uEntries,name:PL.m3uName}));}catch(e){}
   PL.m3uIdx=idx;const e=PL.m3uEntries[idx];
-  PL.backupUrl='';PL.usedBackup=false;
+  PL.backupUrl='';PL.usedBackup=false;PL.audioUrl='';PL.audioDelay=0;PL.serverMuxAudio=false;
   document.getElementById('pChannelName').textContent=e.name;
   document.getElementById('pFmtTag').textContent=fmtLabel(e.url);
   document.getElementById('pBadgeLabel').textContent=isLiveFormat(e.url)?'LIVE':fmtLabel(e.url);
@@ -3252,19 +3308,19 @@ function setVolume(e){
   const r=e.currentTarget.getBoundingClientRect();
   const p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
   const v=document.getElementById('html5Player');
-  if(v){v.volume=p;v.muted=(p===0);}
+  const a=PL.externalAudio;if(v){v.volume=p;v.muted=a?true:(p===0);}if(a){a.volume=p;a.muted=(p===0);}
   PL.vol=p;PL.muted=(p===0);_syncVolUI();
 }
 function changeVol(d){
   const nv=Math.max(0,Math.min(1,PL.vol+d));
   const v=document.getElementById('html5Player');
-  if(v){v.volume=nv;v.muted=(nv===0);}
+  const a=PL.externalAudio;if(v){v.volume=nv;v.muted=a?true:(nv===0);}if(a){a.volume=nv;a.muted=(nv===0);}
   PL.vol=nv;if(nv>0)PL.muted=false;_syncVolUI();
   toast('الصوت: '+Math.round(nv*100)+'%');
 }
 function toggleMute(){
   const v=document.getElementById('html5Player');
-  PL.muted=!PL.muted;if(v)v.muted=PL.muted;_syncVolUI();
+  PL.muted=!PL.muted;const a=PL.externalAudio;if(v)v.muted=a?true:PL.muted;if(a)a.muted=PL.muted;_syncVolUI();
   toast(PL.muted?'كتم الصوت':'تفعيل الصوت');
 }
 function togglePlay(){
@@ -3448,20 +3504,18 @@ async function toggleFullscreen(){
       return;
     }
 
-    /* 2. iOS Safari → webkitEnterFullscreen على الـ video */
-    if(_isIOS){
+    /* 2. iOS/iPadOS: الفيديو الأصلي أولاً، ثم المسار القياسي عند عدم توفره. */
+    if(_isIOS && vid && typeof vid.webkitEnterFullscreen==='function'){
       try{
-        if(vid && vid.webkitEnterFullscreen){
-          vid.webkitEnterFullscreen();
-          _fsActive = true;
-          _fsMethod = 'ios';
-          _setFsIcon(true);
-        }
+        vid.webkitEnterFullscreen();
+        _fsActive = true;
+        _fsMethod = 'ios';
+        _setFsIcon(true);
+        return;
       }catch(e){}
-      return;
     }
 
-    /* 3. كمبيوتر / Android Mobile → Fullscreen API على الـ overlay */
+    /* 3. المتصفحات الأخرى والأجهزة اللوحية: Fullscreen API على الـ overlay */
     const req = ov.requestFullscreen
              || ov.webkitRequestFullscreen
              || ov.mozRequestFullScreen
@@ -3474,7 +3528,7 @@ async function toggleFullscreen(){
         _fsMethod = 'api';
         _setFsIcon(true);
         // قفل landscape على الموبايل فقط
-        if(_UA.isAndroidMobile) _lockL();
+        if(_UA.isAndroid && !_isTV) _lockL();
       }catch(err){
         // Fullscreen API رفض (مثل iframe sandbox) → CSS fallback
         _cssFS(true);
@@ -3536,7 +3590,7 @@ async function toggleFullscreen(){
       _fsActive=true;
       _setFsIcon(true);
       // قفل landscape على الموبايل فقط لا الكمبيوتر
-      if(_UA.isAndroidMobile) _lockL();
+      if(_UA.isAndroid && !_isTV) _lockL();
     }else{
       // خرج من fullscreen (زر Esc أو زر المتصفح)
       if(_fsMethod!=='css'){

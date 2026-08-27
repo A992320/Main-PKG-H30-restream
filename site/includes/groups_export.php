@@ -51,7 +51,7 @@ echo json_encode($__cfg_public, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX
     if (C.pl_show_report === false) extraCss += '.p-report,[onclick*="report"]{display:none !important;} ';
     if (C.mv_play_trailer === false) extraCss += '#trailerBtn,[onclick*="trailer"]{display:none !important;} ';
     if (C.mv_show_similar === false) extraCss += '#similarBox,.similar-section{display:none !important;} ';
-    if (C.usr_dark_mode === false) extraCss += 'body{background:#f0f0f0 !important; color:#000 !important;} '; // تطبيق بسيط للوضع الفاتح
+    if (C.usr_dark_mode === false) extraCss += 'body{background:#0c0e11 !important;color:#f4f5f7 !important;} '; // واجهة الموقع تعتمد سطحاً داكناً ثابتاً
     
     // إعدادات الترجمة
     if (C.sub_font_size) extraCss += 'video#html5Player::cue{font-size:'+C.sub_font_size+'px !important;} ';

@@ -12,7 +12,7 @@
   <div class="nav-center">
     <?php if(!$hide_search): ?>
     <div class="search-wrap">
-      <input type="text" id="searchInput" placeholder="بحث / Search" autocomplete="off" oninput="handleSearch()">
+      <input type="text" id="searchInput" placeholder="<?php echo htmlspecialchars($t['search_ph'] ?? 'بحث / Search'); ?>" autocomplete="off" oninput="handleSearch()">
       <span class="lcn si"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></span>
       <?php /* زرّ مسح البحث: يظهر فقط حين يوجد نصّ، فالحذف بيد المستخدم لا تلقائي */ ?>
       <span class="lcn" id="searchClearBtn" onclick="clearSearchBox()" role="button" title="مسح البحث"
@@ -23,6 +23,17 @@
     <?php endif; ?>
   </div>
   <div class="nav-actions">
+    <details class="site-language-menu">
+      <summary aria-label="تغيير اللغة" title="تغيير اللغة">
+        <span class="lcn" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+        <span class="site-language-code"><?= strtoupper($__cur_lang ?? 'ar') ?></span>
+      </summary>
+      <div class="site-language-options" role="menu">
+        <a href="?lang=ar" role="menuitem" class="<?= ($__cur_lang ?? 'ar') === 'ar' ? 'active' : '' ?>">العربية</a>
+        <a href="?lang=en" role="menuitem" class="<?= ($__cur_lang ?? 'ar') === 'en' ? 'active' : '' ?>">English</a>
+        <a href="?lang=tr" role="menuitem" class="<?= ($__cur_lang ?? 'ar') === 'tr' ? 'active' : '' ?>">Türkçe</a>
+      </div>
+    </details>
     <!-- [SHS-CATMENU-BTN-START] زر قائمة الأقسام (إضافة فقط) -->
     <button type="button" class="shs-catmenu-btn" id="shsCatMenuBtn" title="الأقسام" onclick="shsOpenCatMenu()">
       <span class="lcn"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg></span>
@@ -146,69 +157,29 @@
   </div>
 </main>
 
-<footer style="background:#0d0d0d;border-top:1px solid rgba(255,255,255,.07);direction:rtl">
-
-  <div style="max-width:1000px;margin:0 auto;padding:48px 32px 32px">
-
-    <!-- الأعلى: الشعار والوصف — نفس تصميم القديم -->
-    <div style="text-align:center;margin-bottom:40px">
-      <div style="font-size:1.6rem;font-weight:900;color:var(--red);letter-spacing:-1px;margin-bottom:8px"><?php echo htmlspecialchars($site_name); ?></div>
-      <p style="color:#444;font-size:.82rem;line-height:1.7;margin:0"><?php echo htmlspecialchars($footer_text); ?></p>
+<footer class="site-footer" aria-label="تذييل الموقع">
+  <div class="site-footer__inner">
+    <div class="site-footer__brand">
+      <div class="site-footer__name"><?php echo htmlspecialchars($site_name); ?></div>
+      <p class="site-footer__rights"><?php echo htmlspecialchars($footer_text); ?></p>
     </div>
 
-    <!-- عنوان التواصل -->
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;justify-content:center">
-      <div style="flex:1;max-width:120px;height:1px;background:linear-gradient(to right,transparent,rgba(229,9,20,.3))"></div>
-      <span style="font-size:.68rem;font-weight:800;color:#444;text-transform:uppercase;letter-spacing:3px">تواصل معنا</span>
-      <div style="flex:1;max-width:120px;height:1px;background:linear-gradient(to left,transparent,rgba(229,9,20,.3))"></div>
-    </div>
-
-    <!-- أزرار التواصل أفقية -->
     <?php if(!$hide_social): ?>
-    <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center;margin-bottom:40px">
-
-      <!-- واتساب -->
-  <a href="https://wa.me/<?php echo preg_replace('/[^0-9]/', '', $settings['contact_whatsapp'] ?? '9647512328848'); ?>" target="_blank" rel="noopener noreferrer"
-         style="display:flex;align-items:center;gap:10px;padding:12px 22px;border-radius:50px;background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.2);text-decoration:none;color:#e2e8f0;font-size:.85rem;font-weight:700;transition:all .22s;white-space:nowrap"
-         onmouseover="this.style.background='rgba(37,211,102,.2)';this.style.borderColor='rgba(37,211,102,.5)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(37,211,102,.2)'"
-         onmouseout="this.style.background='rgba(37,211,102,.08)';this.style.borderColor='rgba(37,211,102,.2)';this.style.transform='translateY(0)';this.style.boxShadow='none'">
-        <div style="width:30px;height:30px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-        </div>
-        واتساب
-      </a>
-
-      <!-- فيسبوك -->
-      <a href="https://<?php echo htmlspecialchars(ltrim($settings['contact_facebook'] ?? 'facebook.com/xxkpq', 'https://')); ?>" target="_blank" rel="noopener"
-         style="display:flex;align-items:center;gap:10px;padding:12px 22px;border-radius:50px;background:rgba(24,119,242,.08);border:1px solid rgba(24,119,242,.2);text-decoration:none;color:#e2e8f0;font-size:.85rem;font-weight:700;transition:all .22s;white-space:nowrap"
-         onmouseover="this.style.background='rgba(24,119,242,.2)';this.style.borderColor='rgba(24,119,242,.5)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(24,119,242,.2)'"
-         onmouseout="this.style.background='rgba(24,119,242,.08)';this.style.borderColor='rgba(24,119,242,.2)';this.style.transform='translateY(0)';this.style.boxShadow='none'">
-        <div style="width:30px;height:30px;border-radius:50%;background:#1877F2;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-        </div>
-        فيسبوك
-      </a>
-
-      <!-- البريد -->
-      <a href="mailto:<?php echo htmlspecialchars($settings['contact_email'] ?? 'info@shashety-pro.com'); ?>"
-         style="display:flex;align-items:center;gap:10px;padding:12px 22px;border-radius:50px;background:rgba(229,9,20,.08);border:1px solid rgba(229,9,20,.2);text-decoration:none;color:#e2e8f0;font-size:.85rem;font-weight:700;transition:all .22s;white-space:nowrap"
-         onmouseover="this.style.background='rgba(229,9,20,.2)';this.style.borderColor='rgba(229,9,20,.5)';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(229,9,20,.2)'"
-         onmouseout="this.style.background='rgba(229,9,20,.08)';this.style.borderColor='rgba(229,9,20,.2)';this.style.transform='translateY(0)';this.style.boxShadow='none'">
-        <div style="width:30px;height:30px;border-radius:50%;background:#e50914;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-        </div>
-        البريد الإلكتروني
-      </a>
-
+    <div class="site-footer__contact">
+      <div class="site-footer__contact-title" aria-hidden="true"><span></span><b>تواصل معنا</b><span></span></div>
+      <nav class="site-footer__socials" aria-label="روابط التواصل">
+        <a class="site-footer__social site-footer__social--whatsapp" href="https://wa.me/<?php echo preg_replace('/[^0-9]/', '', $settings['contact_whatsapp'] ?? '9647512328848'); ?>" target="_blank" rel="noopener noreferrer">
+          <svg class="site-footer__social-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg><span>واتساب</span>
+        </a>
+        <a class="site-footer__social site-footer__social--facebook" href="https://<?php echo htmlspecialchars(ltrim($settings['contact_facebook'] ?? 'facebook.com/xxkpq', 'https://')); ?>" target="_blank" rel="noopener">
+          <svg class="site-footer__social-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg><span>فيسبوك</span>
+        </a>
+        <a class="site-footer__social site-footer__social--email" href="mailto:<?php echo htmlspecialchars($settings['contact_email'] ?? 'info@shashety-pro.com'); ?>">
+          <svg class="site-footer__social-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg><span>البريد الإلكتروني</span>
+        </a>
+      </nav>
     </div>
     <?php endif; ?>
-
-    <!-- فاصل + حقوق -->
-    <div style="height:1px;background:rgba(255,255,255,.05);margin-bottom:20px"></div>
-    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px">
-      <span style="color:#2e2e2e;font-size:.74rem"><?php echo htmlspecialchars($footer_text); ?></span>
-    </div>
-
   </div>
 </footer>
 
