@@ -5,6 +5,22 @@
 // -------------------------------------------------------------------
 
 
+/** يضيف حقل رابط الصوت مرة واحدة فقط للترقيات من النسخ القديمة. */
+function invalidateChannelContentCache(): void {
+    if (function_exists('cacheFlush')) cacheFlush();
+    elseif (function_exists('cacheDelete')) cacheDelete('content_stamp');
+}
+
+function ensureChannelAudioUrlColumn(PDO $pdo): void {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+    try { $pdo->exec("ALTER TABLE channels ADD COLUMN audio_url TEXT NULL AFTER stream_url"); }
+    catch (PDOException $e) { /* العمود موجود مسبقاً أو قاعدة البيانات قديمة جداً */ }
+    try { $pdo->exec("ALTER TABLE channels ADD COLUMN audio_delay DECIMAL(7,3) NOT NULL DEFAULT 0.000 AFTER audio_url"); }
+    catch (PDOException $e) { /* العمود موجود مسبقاً */ }
+}
+
 // كود: إضافة قناة جديدة
 if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])){
     // CSRF Check
@@ -16,9 +32,12 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])){
     }
 
     try {
+        ensureChannelAudioUrlColumn($pdo);
         $cat_id = (int)$_POST['category_id'];
         $name = htmlspecialchars(strip_tags($_POST['channel_name']));
         $url = $_POST['stream_url'] ?? '';
+        $audio_url = trim($_POST['audio_url'] ?? '');
+        $audio_delay = max(-30.0, min(30.0, (float)($_POST['audio_delay'] ?? 0)));
         $icon = htmlspecialchars(strip_tags($_POST['logo_icon'] ?? 'fas fa-tv'));
         $logo = $_POST['logo_url'] ?? '';
         $backup_url = trim($_POST['backup_url'] ?? '');
@@ -27,7 +46,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_channel'])){
         if (!in_array($quality, $allowed_quality, true)) $quality = 'HD 720';
         $is_active = (isset($_POST['is_active']) && $_POST['is_active'] === '1') ? 1 : 0;
         
-        $pdo->prepare("INSERT INTO channels (category_id, name, stream_url, logo_icon, logo_url, backup_url, quality, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")->execute([$cat_id, $name, $url, $icon, $logo, $backup_url, $quality, $is_active]);
+        $pdo->prepare("INSERT INTO channels (category_id, name, stream_url, audio_url, audio_delay, logo_icon, logo_url, backup_url, quality, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")->execute([$cat_id, $name, $url, $audio_url, $audio_delay, $icon, $logo, $backup_url, $quality, $is_active]);
+        invalidateChannelContentCache();
         $_SESSION['success'] = '✅ تم إضافة القناة بنجاح.'; 
     } catch(PDOException $e) {
         error_log('[shashety] DB error: ' . $e->getMessage());
@@ -48,10 +68,13 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_channel'])){
     }
 
     try {
+        ensureChannelAudioUrlColumn($pdo);
         $id = (int)$_POST['channel_id'];
         $cat_id = (int)$_POST['category_id'];
         $name = htmlspecialchars(strip_tags($_POST['channel_name']));
         $url = $_POST['stream_url'] ?? '';
+        $audio_url = trim($_POST['audio_url'] ?? '');
+        $audio_delay = max(-30.0, min(30.0, (float)($_POST['audio_delay'] ?? 0)));
         $icon = htmlspecialchars(strip_tags($_POST['logo_icon'] ?? 'fas fa-tv'));
         $logo = $_POST['logo_url'] ?? '';
         $backup_url = trim($_POST['backup_url'] ?? '');
@@ -60,7 +83,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_channel'])){
         if (!in_array($quality, $allowed_quality, true)) $quality = 'HD 720';
         $is_active = (isset($_POST['is_active']) && $_POST['is_active'] === '1') ? 1 : 0;
         
-        $pdo->prepare("UPDATE channels SET category_id=?, name=?, stream_url=?, logo_icon=?, logo_url=?, backup_url=?, quality=?, is_active=? WHERE id=?")->execute([$cat_id, $name, $url, $icon, $logo, $backup_url, $quality, $is_active, $id]);
+        $pdo->prepare("UPDATE channels SET category_id=?, name=?, stream_url=?, audio_url=?, audio_delay=?, logo_icon=?, logo_url=?, backup_url=?, quality=?, is_active=? WHERE id=?")->execute([$cat_id, $name, $url, $audio_url, $audio_delay, $icon, $logo, $backup_url, $quality, $is_active, $id]);
+        invalidateChannelContentCache();
         $_SESSION['success'] = '✅ تم تعديل القناة بنجاح.'; 
     } catch(PDOException $e) {
         error_log('[shashety] DB error: ' . $e->getMessage());

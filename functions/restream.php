@@ -258,7 +258,7 @@ function rsPidFile(string $key): string { return rsDir($key) . '/.pid'; }
 
 /* تغيير مسار إخراج FFmpeg يجب أن يعيد تشغيل العمليات القديمة مرة واحدة،
    وإلا يبقى المشاهد على عملية تعمل بالإعداد السابق حتى انتهاء الخمول. */
-function rsPipelineVersion(): string { return 'hls-browser-fmp4-v3'; }
+function rsPipelineVersion(): string { return 'hls-browser-fmp4-v4-audio-mux'; }
 function rsPipelineFile(string $key): string { return rsDir($key) . '/.pipeline'; }
 function rsPipelineCurrent(string $key): bool {
     return trim((string)@file_get_contents(rsPipelineFile($key))) === rsPipelineVersion();
@@ -379,10 +379,11 @@ function rsStop(string $key): void {
  *
  * @return array{ok:bool,error?:string,started?:bool}
  */
-function rsStart(string $key, string $srcUrl, bool $compatVideo = false): array {
+function rsStart(string $key, string $srcUrl, bool $compatVideo = false, string $audioUrl = '', float $audioDelay = 0.0): array {
     if (!rsEnabled()) return ['ok' => false, 'error' => 'disabled'];
     if (!preg_match('~^https?://~i', $srcUrl)) return ['ok' => false, 'error' => 'bad_url'];
-
+    if ($audioUrl !== '' && !preg_match('~^https?://~i', $audioUrl)) $audioUrl = '';
+    $audioDelay = max(-30.0, min(30.0, $audioDelay));
     /* كثير من الاستضافات تعطّل shell_exec في php.ini عبر disable_functions.
        بدون هذا الفحص يُرجع @shell_exec القيمة null فيبدو الأمر كأن ffmpeg
        فشل — فيُبحث عن العلة في الترميز أو المصدر بينما الدالة نفسها ممنوعة.
@@ -480,7 +481,12 @@ function rsStart(string $key, string $srcUrl, bool $compatVideo = false): array 
          . ' -rw_timeout 15000000 -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
          . ' -user_agent ' . escapeshellarg('VLC/3.0.20 LibVLC/3.0.20')
          . ' -i ' . escapeshellarg($srcUrl)
-         . ' -map 0:v:0 -map 0:a:0?'
+         /* عند وجود رابط صوت منفصل نجمعه هنا في HLS واحد. هذا أدق من
+            تشغيل عنصري video/audio مستقلين في المتصفح، إذ يستخدم FFmpeg
+            الطوابع الزمنية ويعيد أخذ عينات الصوت في خط واحد. */
+         . ($audioUrl !== ''
+             ? ' -itsoffset ' . escapeshellarg(number_format($audioDelay, 3, '.', '')) . ' -rw_timeout 15000000 -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -i ' . escapeshellarg($audioUrl) . ' -map 0:v:0 -map 1:a:0?'
+             : ' -map 0:v:0 -map 0:a:0?')
          /* نسخ H.264/1080p السليم سريع جداً. أما أي فيديو لا يفهمه
             المتصفح فنحوّله هنا مرة واحدة لكل قناة، لا مرة لكل مستخدم. */
          . ($transcodeVideo
@@ -491,9 +497,9 @@ function rsStart(string $key, string $srcUrl, bool $compatVideo = false): array 
             نعيد مزامنة الصوت ونوحّد العيّنة إلى 48kHz قبل AAC stereo. */
          . ' -c:a aac -b:a 192k -ac 2 -ar 48000 -af ' . escapeshellarg('aresample=async=1:min_hard_comp=0.100:first_pts=0')
          /* fMP4 يحوي معلومات البداية في init.mp4 ويعمل مباشرةً مع MSE
-            في Chrome/Edge/Safari. هذا يزيل اختلاف VLC المتسامح عن
-            المتصفحات مع مقاطع TS الحية. مقاطع ثانيتين تقلل زمن الاستجابة. */
-         . ' -f hls -hls_segment_type fmp4 -hls_time 2'
+            في Chrome/Edge/Safari. المقاطع الأطول تمنح البث الحي هامشاً
+            مستقراً عند تأخر المصدر أو كتابة أي مقطع. */
+         . ' -f hls -hls_segment_type fmp4 -hls_time 4'
          . ' -hls_fmp4_init_filename init.mp4'
          /* ══ الفارق الجوهري بين الفيلم والبثّ الحيّ ══
             الحيّ: قائمة متدحرجة من ست مقاطع تُحذف خلف المشاهد. لا معنى
@@ -505,7 +511,7 @@ function rsStart(string $key, string $srcUrl, bool $compatVideo = false): array 
                   المدة تنمو، فلا يعرض Infinity:NaN. */
          . ($isVod
              ? ' -hls_list_size 0 -hls_playlist_type event -hls_flags independent_segments+append_list'
-             : ' -hls_list_size 5 -hls_flags independent_segments+delete_segments+append_list+omit_endlist')
+             : ' -hls_list_size 8 -hls_flags independent_segments+delete_segments+append_list+omit_endlist+temp_file')
          . ' -hls_allow_cache 0'
          . ' -hls_segment_filename ' . escapeshellarg($dir . '/s%05d.m4s')
          . ' ' . escapeshellarg($idx)
