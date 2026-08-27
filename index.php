@@ -18,6 +18,18 @@ require_once __DIR__ . '/site/gates/maintenance.php';
 // صفحة الصيانة أولوية على شاشة الدخول.
 require_once __DIR__ . '/site/gates/subscriber_gate.php';
 require_once __DIR__ . '/site/config/db_extra.php';
+/* ---------- SITE LANGUAGE ---------- */
+if (session_status() !== PHP_SESSION_ACTIVE) { @session_start(); }
+$__site_languages = ['ar', 'en', 'tr'];
+if (isset($_GET['lang']) && in_array($_GET['lang'], $__site_languages, true)) {
+    $_SESSION['lang'] = $_GET['lang'];
+}
+$__cur_lang = $_SESSION['lang'] ?? 'ar';
+if (!in_array($__cur_lang, $__site_languages, true)) { $__cur_lang = 'ar'; }
+$__dir = $__cur_lang === 'ar' ? 'rtl' : 'ltr';
+$__lang_file = __DIR__ . '/lang/lang_' . $__cur_lang . '.php';
+$t = is_file($__lang_file) ? require $__lang_file : [];
+if (!is_array($t)) { $t = []; }
 
 /* ---------- VIEW ---------- */
 require_once __DIR__ . '/site/includes/head.php';

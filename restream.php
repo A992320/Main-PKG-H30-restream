@@ -81,26 +81,31 @@ $id   = $epId > 0 ? $epId : $chId;
 /* compat=1 يطلب نسخة H.264/1080p مستقلة للقناة نفسها. المفتاح المختلف
    يمنع إيقاف أو إعادة استخدام البث العادي عند تفعيل توافق 4K. */
 $compatVideo = ((string)($_GET['compat'] ?? '') === '1');
-$key  = rsKey($kind, $id) . ($compatVideo ? ':h264' : '');
-
-// ── نبضة النشاط: أرخص مسار، لا يلمس قاعدة البيانات ──
-if (!empty($_GET['ping'])) {
-    if (rsRunning($key)) { rsTouch($key); rxJson(['success' => true, 'alive' => true]); }
-    rxJson(['success' => false, 'alive' => false], 410);
-}
-
 // ── الرابط من قاعدة البيانات حصراً ──
 try {
     if ($kind === 'e') {
-        $st = db()->prepare('SELECT title AS name, stream_url FROM episodes WHERE id = ? LIMIT 1');
+        $st = db()->prepare('SELECT title AS name, stream_url, NULL AS audio_url, 0.000 AS audio_delay FROM episodes WHERE id = ? LIMIT 1');
     } else {
-        $st = db()->prepare('SELECT name, stream_url FROM channels WHERE id = ? LIMIT 1');
+        $st = db()->prepare('SELECT name, stream_url, audio_url, audio_delay FROM channels WHERE id = ? LIMIT 1');
     }
     $st->execute([$id]);
     $row = $st->fetch(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
-    if (function_exists('logTo')) logTo('error', 'restream db: ' . $e->getMessage());
-    rxJson(['success' => false, 'error' => 'server'], 500);
+    /* ترقية قديمة لم تشغّل database.sql بعد: نُبقي القناة قابلة للتشغيل
+       بلا صوت منفصل بدلاً من إرجاع خطأ خادم بسبب العمود الجديد. */
+    if ($kind === 'c' && (stripos($e->getMessage(), 'audio_url') !== false || stripos($e->getMessage(), 'audio_delay') !== false)) {
+        try {
+            $st = db()->prepare('SELECT name, stream_url, NULL AS audio_url, 0.000 AS audio_delay FROM channels WHERE id = ? LIMIT 1');
+            $st->execute([$id]);
+            $row = $st->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable $fallbackError) {
+            if (function_exists('logTo')) logTo('error', 'restream db: ' . $fallbackError->getMessage());
+            rxJson(['success' => false, 'error' => 'server'], 500);
+        }
+    } else {
+        if (function_exists('logTo')) logTo('error', 'restream db: ' . $e->getMessage());
+        rxJson(['success' => false, 'error' => 'server'], 500);
+    }
 }
 if (!$row) rxJson(['success' => false, 'error' => 'channel_not_found'], 404);
 
@@ -108,9 +113,24 @@ $src = trim((string)$row['stream_url']);
 if (!preg_match('~^https?://~i', $src)) {
     rxJson(['success' => false, 'error' => 'unsupported_source'], 400);
 }
+$audio = trim((string)($row['audio_url'] ?? ''));
+// لا نسمح إلا برابط HTTP(S) ثانٍ؛ الإدخال الخاطئ لا يوقف صورة القناة.
+if ($audio !== '' && !preg_match('~^https?://~i', $audio)) $audio = '';
+$audioDelay = max(-30.0, min(30.0, (float)($row['audio_delay'] ?? 0)));
+
+/* يتغير المفتاح عند تغيير رابط الصوت كي لا تستمر عملية FFmpeg قديمة
+   في إخراج صوت القناة السابق بعد تعديلها من لوحة الإدارة. */
+$key = rsKey($kind, $id) . ($compatVideo ? ':h264' : '');
+if ($audio !== '') $key .= ':a' . substr(hash('sha256', $audio . '|' . number_format($audioDelay, 3, '.', '')), 0, 12);
+
+// ── نبضة النشاط: بعد قراءة الرابط كي تطابق نسخة الصوت الحالية ──
+if (!empty($_GET['ping'])) {
+    if (rsRunning($key)) { rsTouch($key); rxJson(['success' => true, 'alive' => true]); }
+    rxJson(['success' => false, 'alive' => false], 410);
+}
 
 // ── التشغيل ──
-$r = rsStart($key, $src, $compatVideo);
+$r = rsStart($key, $src, $compatVideo, $audio, $audioDelay);
 
 // تنظيف انتهازي: كل تشغيل جديد فرصة لإنهاء ما هُجر.
 // لا نعتمد على cron وحده — لو تعطّل لتراكمت العمليات حتى تلتهم الخادم.

@@ -138,7 +138,7 @@ function apiProtectStreamUrls($node)
         if (is_array($v)) {
             $node[$k] = apiProtectStreamUrls($v);
         } elseif (is_string($v) && $v !== ''
-                  && ($k === 'stream_url' || $k === 'backup_url' || $k === 'url')) {
+                  && ($k === 'stream_url' || $k === 'audio_url' || $k === 'backup_url' || $k === 'url')) {
             $node[$k] = streamPublicUrl($v, (string) $base);
         }
     }
@@ -272,15 +272,15 @@ function computeContentVersion(): string
     // القنوات والمسلسلات: النشطة فقط + أعلى معرّف
     foreach (['channels' => 'is_active = 1', 'series' => 'is_active = 1'] as $tbl => $cond) {
         try {
-            $row = $pdo->query("SELECT COUNT(*) AS c, COALESCE(MAX(id),0) AS m FROM `$tbl` WHERE $cond")
+            $row = $pdo->query("SELECT COUNT(*) AS c, COALESCE(MAX(id),0) AS m, COALESCE(MAX(UNIX_TIMESTAMP(updated_at)),0) AS u FROM `$tbl` WHERE $cond")
                        ->fetch(PDO::FETCH_ASSOC);
-            $parts[] = $tbl . ':' . (int) $row['c'] . ':' . (int) $row['m'];
+            $parts[] = $tbl . ':' . (int) $row['c'] . ':' . (int) $row['m'] . ':' . (int) ($row['u'] ?? 0);
         } catch (PDOException $e) {
             // إن لم يوجد عمود is_active نعيد المحاولة بلا شرط
             try {
-                $row = $pdo->query("SELECT COUNT(*) AS c, COALESCE(MAX(id),0) AS m FROM `$tbl`")
+                $row = $pdo->query("SELECT COUNT(*) AS c, COALESCE(MAX(id),0) AS m, COALESCE(MAX(UNIX_TIMESTAMP(updated_at)),0) AS u FROM `$tbl`")
                            ->fetch(PDO::FETCH_ASSOC);
-                $parts[] = $tbl . ':' . (int) $row['c'] . ':' . (int) $row['m'];
+                $parts[] = $tbl . ':' . (int) $row['c'] . ':' . (int) $row['m'] . ':' . (int) ($row['u'] ?? 0);
             } catch (PDOException $e2) {
                 $parts[] = $tbl . ':0:0';
             }
@@ -292,7 +292,7 @@ function computeContentVersion(): string
         try {
             $row = $pdo->query("SELECT COUNT(*) AS c, COALESCE(MAX(id),0) AS m FROM `$tbl`")
                        ->fetch(PDO::FETCH_ASSOC);
-            $parts[] = $tbl . ':' . (int) $row['c'] . ':' . (int) $row['m'];
+            $parts[] = $tbl . ':' . (int) $row['c'] . ':' . (int) $row['m'] . ':' . (int) ($row['u'] ?? 0);
         } catch (PDOException $e) {
             $parts[] = $tbl . ':0:0';
         }
@@ -1057,18 +1057,33 @@ function getNotificationState()
 function getSeries()
 {
     try {
+        $series_id   = safeInt($_GET['id'] ?? null, 0, 2147483647, 0);
         $category_id = isset($_GET['category_id']) ? (int) $_GET['category_id'] : 0;
         $limit       = safeInt($_GET['limit']  ?? null, 1, 500,     200);
         $offset      = safeInt($_GET['offset'] ?? null, 0, 1000000, 0);
         $after_id    = safeInt($_GET['after_id'] ?? null, 0, 2147483647, 0);
 
-        $key = "srs:{$category_id}:{$limit}:{$offset}:{$after_id}:" . apiContentStamp();
+        $key = "srs:{$series_id}:{$category_id}:{$limit}:{$offset}:{$after_id}:" . apiContentStamp();
 
         $series = apiRemember(
             $key,
             120,
-            static function () use ($category_id, $limit, $offset, $after_id): array {
+            static function () use ($series_id, $category_id, $limit, $offset, $after_id): array {
                 $pdo = db();
+
+                if ($series_id > 0) {
+                    $stmt = $pdo->prepare("
+                        SELECT s.*, c.name as cat_name, c.icon as cat_icon, COUNT(e.id) as ep_count
+                        FROM series s
+                        LEFT JOIN categories c ON s.category_id = c.id
+                        LEFT JOIN episodes   e ON e.series_id   = s.id
+                        WHERE s.id = ? AND s.is_active = 1
+                        GROUP BY s.id
+                        LIMIT 1
+                    ");
+                    $stmt->execute([$series_id]);
+                    return $stmt->fetchAll();
+                }
 
                 if ($after_id > 0) {
                     $stmt = $pdo->prepare("
